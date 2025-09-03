@@ -1,0 +1,54 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          cache-dependency-path: build/package-lock.json
+
+      - name: Instalar dependências
+        working-directory: build
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --legacy-peer-deps
+          else
+            npm i --legacy-peer-deps
+          fi
+
+      - name: Gerar build
+        working-directory: build
+        run: npm run build
+
+      - name: Copiar arquivos para a raiz
+        shell: bash
+        run: |
+          shopt -s extglob
+          rm -rf !(build|.git|.github|README.md|.gitignore)
+          cp -r build/dist/* ./
+
+      - name: Commit e push do conteúdo
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Deploy automático via GitHub Actions [skip ci]" || echo "Nada para commitar"
+          git push
